@@ -1,0 +1,32 @@
+{
+  "name": "opencode-plugin-intelligence",
+  "version": "0.1.0",
+  "description": "Annotate OpenCode model names with the Artificial Analysis Intelligence Index.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "scripts",
+    "test",
+    "README.md"
+  ],
+  "keywords": [
+    "opencode",
+    "plugin",
+    "artificial-analysis",
+    "models",
+    "intelligence-index"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "refresh-cache": "node ./scripts/refresh-cache.mjs"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "^1.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
