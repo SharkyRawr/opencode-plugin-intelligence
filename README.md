@@ -2,6 +2,8 @@
 
 OpenCode v2 plugin that annotates model display names with the Artificial Analysis Intelligence Index.
 
+![OpenCode model picker showing Artificial Analysis intelligence scores alongside model names](.github/preview.heic)
+
 ## What it does
 
 Matched models appear as `Model Name (AIQ: 60)` in the `/models` picker. Scores retain up to two decimal places, for example `(AIQ: 53.97)`. AIQ is the Artificial Analysis Intelligence Index score, not a leaderboard rank or a human IQ score.
