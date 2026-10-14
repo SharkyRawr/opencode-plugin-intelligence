@@ -63,3 +63,7 @@ node --test
 ```
 
 When changing leaderboard fetching or parsing, also run `npm run refresh-cache`.
+
+## License
+
+Licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): attribution, noncommercial use, and share-alike are required. See [LICENSE](LICENSE) for the full terms.

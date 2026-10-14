@@ -1,17 +1,21 @@
 {
   "name": "@lunacode/opencode-plugin-intelligence",
   "version": "0.1.0",
+  "license": "CC-BY-NC-SA-4.0",
   "description": "Annotate OpenCode model names with the Artificial Analysis Intelligence Index.",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": "./index.js"
   },
   "files": [
     "index.js",
     "src",
-    "scripts",
-    "test",
-    "README.md"
+    "scripts/refresh-cache.mjs",
+    "README.md",
+    "LICENSE"
   ],
   "keywords": [
     "opencode",
