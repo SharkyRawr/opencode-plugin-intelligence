@@ -32,7 +32,7 @@ async function fetchLeaderboardHtml() {
     response = await fetch(LEADERBOARD_URL, {
       signal: controller.signal,
       headers: {
-        "user-agent": "opencode-plugin-intelligence/0.1.0",
+        "user-agent": "opencode-plugin-intelligence/0.1.1",
       },
     });
   } finally {

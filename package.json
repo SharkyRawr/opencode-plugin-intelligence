@@ -1,9 +1,13 @@
 {
   "name": "@lunacode/opencode-plugin-intelligence",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "CC-BY-NC-SA-4.0",
   "description": "Annotate OpenCode model names with the Artificial Analysis Intelligence Index.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SharkyRawr/opencode-plugin-intelligence.git"
+  },
   "publishConfig": {
     "access": "public"
   },

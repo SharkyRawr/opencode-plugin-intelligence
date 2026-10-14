@@ -64,6 +64,20 @@ node --test
 
 When changing leaderboard fetching or parsing, also run `npm run refresh-cache`.
 
+## Publishing
+
+GitHub Actions runs Biome and tests on branch pushes and pull requests. Pushing a `v<version>` tag runs the same checks and publishes to npm using trusted publishing. The tag must match `package.json`, for example `v0.1.0` for version `0.1.0`.
+
+Configure a GitHub Actions trusted publisher in the npm package's settings:
+
+- Organization or user: `SharkyRawr`
+- Repository: `opencode-plugin-intelligence`
+- Workflow filename: `publish.yml`
+- Environment name: leave blank
+- Allow direct publishing with `npm publish`
+
+No npm token secret is required. If the package does not exist yet, publish its first version manually before configuring the trusted publisher. Use a new version for the first tag-triggered publish; npm cannot overwrite an existing version. See [npm's trusted publishing documentation](https://docs.npmjs.com/trusted-publishers) for setup details.
+
 ## License
 
 Licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): attribution, noncommercial use, and share-alike are required. See [LICENSE](LICENSE) for the full terms.
