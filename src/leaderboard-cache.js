@@ -1,10 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
 import { extractLeaderboardSnapshot } from "./leaderboard-parser.js";
 
 const LEADERBOARD_URL = "https://artificialanalysis.ai/leaderboards/models";
 const FETCH_TIMEOUT_MS = 4000;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const pendingRefreshes = new Map();
 
 function resolveCachePath({ directory, worktree, cachePath }) {
   if (cachePath) {
@@ -38,7 +40,9 @@ async function fetchLeaderboardHtml() {
   }
 
   if (!response.ok) {
-    throw new Error(`Artificial Analysis request failed with ${response.status}`);
+    throw new Error(
+      `Artificial Analysis request failed with ${response.status}`,
+    );
   }
 
   return response.text();
@@ -56,32 +60,85 @@ export async function readCacheFile(cacheFile) {
 
 export async function writeCacheFile(cacheFile, snapshot) {
   await ensureDirectory(cacheFile);
-  await writeFile(cacheFile, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
+  await writeFile(cacheFile, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
 }
 
-export async function refreshLeaderboardCache({ directory, worktree, cachePath } = {}) {
-  const snapshot = await fetchLeaderboardSnapshot();
-  const resolvedCachePath = resolveCachePath({ directory, worktree, cachePath });
-
-  await writeCacheFile(resolvedCachePath, snapshot);
-
-  return snapshot;
-}
-
-export async function readLeaderboardCache({ directory, worktree, cachePath } = {}) {
-  const resolvedCachePath = resolveCachePath({ directory, worktree, cachePath });
-
+export async function refreshLeaderboardCache({
+  directory,
+  worktree,
+  cachePath,
+} = {}) {
+  const resolvedCachePath = resolveCachePath({
+    directory,
+    worktree,
+    cachePath,
+  });
+  if (pendingRefreshes.has(resolvedCachePath))
+    return pendingRefreshes.get(resolvedCachePath);
+  const pending = (async () => {
+    const snapshot = await fetchLeaderboardSnapshot();
+    await writeCacheFile(resolvedCachePath, snapshot);
+    return snapshot;
+  })();
+  pendingRefreshes.set(resolvedCachePath, pending);
   try {
-    return await readCacheFile(resolvedCachePath);
+    return await pending;
+  } finally {
+    pendingRefreshes.delete(resolvedCachePath);
+  }
+}
+
+export async function readLeaderboardCache({
+  directory,
+  worktree,
+  cachePath,
+} = {}) {
+  const resolvedCachePath = resolveCachePath({
+    directory,
+    worktree,
+    cachePath,
+  });
+
+  let cached;
+  try {
+    cached = await readCacheFile(resolvedCachePath);
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return refreshLeaderboardCache({ directory, worktree, cachePath: resolvedCachePath });
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return refreshLeaderboardCache({
+        directory,
+        worktree,
+        cachePath: resolvedCachePath,
+      });
     }
 
     throw error;
   }
+
+  const age = Date.now() - Date.parse(cached.fetchedAt);
+  if (age >= 0 && age < CACHE_TTL_MS) return cached;
+  try {
+    return await refreshLeaderboardCache({ cachePath: resolvedCachePath });
+  } catch (error) {
+    console.warn(
+      "opencode-plugin-intelligence: Refresh failed; using stale leaderboard cache",
+      error,
+    );
+    return cached;
+  }
 }
 
 export function defaultCachePath() {
-  return path.join(os.homedir(), ".config", "opencode", "cache", "opencode-plugin-intelligence", "leaderboard.json");
+  return path.join(
+    os.homedir(),
+    ".config",
+    "opencode",
+    "cache",
+    "opencode-plugin-intelligence",
+    "leaderboard.json",
+  );
 }

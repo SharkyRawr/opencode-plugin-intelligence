@@ -1,5 +1,5 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 import { extractLeaderboardSnapshot } from "../src/leaderboard-parser.js";
 
 const fixture = `
@@ -25,4 +25,48 @@ test("extractLeaderboardSnapshot parses model scores from escaped payloads", () 
     },
     modelUrl: "https://artificialanalysis.ai/models/gpt-5-3-codex",
   });
+});
+
+function flightScript(text) {
+  return `<script>self.__next_f.push([1,${JSON.stringify(text)}]);</script>`;
+}
+
+test("parses current camelCase models in a Flight record split across scripts", () => {
+  const models = [
+    {
+      slug: "example",
+      shortName: "Example Model",
+      intelligenceIndex: 60,
+      intelligenceIndexIsEstimated: false,
+      modelCreatorName: "Example Creator",
+    },
+    { slug: "unscored", shortName: "Unscored Model", intelligenceIndex: null },
+  ];
+  const record = `35:${JSON.stringify(["$", "div", null, { children: [["$", "$L36", null, { models }]] }])}\n`;
+  const split = record.indexOf("intelligenceIndex") + 5;
+  const html =
+    flightScript('1:"$Sreact.fragment"\n2:I[123]\n') +
+    flightScript(record.slice(0, split)) +
+    flightScript(record.slice(split));
+  const snapshot = extractLeaderboardSnapshot(html);
+  assert.equal(snapshot.modelCount, 1);
+  assert.deepEqual(snapshot.models[0], {
+    id: "example",
+    slug: "example",
+    shortName: "Example Model",
+    intelligenceIndex: 60,
+    estimatedIntelligenceIndex: false,
+    creator: { name: "Example Creator", slug: null },
+    modelUrl: null,
+  });
+});
+
+test("rejects a leaderboard with no usable scores", () => {
+  const html = flightScript(
+    '35:{"models":[{"shortName":"Unscored","intelligenceIndex":null}]}\n',
+  );
+  assert.throws(
+    () => extractLeaderboardSnapshot(html),
+    /Could not find leaderboard models/,
+  );
 });

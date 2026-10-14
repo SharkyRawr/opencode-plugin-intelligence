@@ -1,8 +1,10 @@
-const INTELLIGENCE_TAG_PATTERN = /\s+\[AAII [0-9]+(?:\.[0-9]+)?\]$/;
+const INTELLIGENCE_TAG_PATTERN =
+  /(?:\s+(?:\[AAII [0-9]+(?:\.[0-9]+)?\]|\(AIQ: [0-9]+(?:\.[0-9]+)?\)))+$/;
 
 function normalizeText(value) {
   return value
     .toLowerCase()
+    .replace(/[-\s:]+free$/, "")
     .replace(/\bpreview\b/g, "")
     .replace(/\badaptive reasoning\b/g, "")
     .replace(/\bmax effort\b/g, "max")
@@ -30,29 +32,7 @@ function reasoningVariant(value) {
 }
 
 function scoreTag(score) {
-  return `[AAII ${Number(score.toFixed(2)).toString()}]`;
-}
-
-function candidateModelIds(model) {
-  const slug = model.slug ?? "";
-  const shortName = model.shortName ?? "";
-  const candidates = new Set([slug]);
-
-  const slugWithDots = slug.replace(/(\d)-(\d)/g, "$1.$2");
-  candidates.add(slugWithDots);
-
-  const compactName = shortName
-    .toLowerCase()
-    .replace(/[()]/g, "")
-    .replace(/[^a-z0-9.+-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  if (compactName) {
-    candidates.add(compactName);
-  }
-
-  return [...candidates].filter(Boolean);
+  return `(AIQ: ${Number(score.toFixed(2)).toString()})`;
 }
 
 function setModelOverride(providerConfig, modelId, displayName) {
@@ -68,6 +48,12 @@ function baseDisplayName(name) {
 function nameVariants(value) {
   const normalized = normalizeText(value);
   const variants = new Set([normalized]);
+  variants.add(
+    normalized
+      .replace(/(\d)[.-](?=\d)/g, "$1.")
+      .replace(/[-\s]+/g, " ")
+      .trim(),
+  );
 
   if (normalized.includes(".")) {
     variants.add(normalized.replaceAll(".", " "));
@@ -83,16 +69,11 @@ function nameVariants(value) {
 
 function modelCandidates(modelId, modelName) {
   const candidates = new Set();
-
-  if (modelId) {
-    candidates.add(modelId);
-    candidates.add(modelId.toLowerCase());
-    candidates.add(modelId.toLowerCase().replaceAll("/", "-"));
-    candidates.add(modelId.toLowerCase().replaceAll("/", ""));
-  }
-
-  if (modelName) {
-    for (const variant of nameVariants(modelName)) {
+  // Prefer explicit display-name variants over a provider's generic model ID.
+  for (const value of [modelName, modelId, modelId?.split("/").at(-1)].filter(
+    Boolean,
+  )) {
+    for (const variant of nameVariants(value)) {
       candidates.add(variant);
       candidates.add(variant.replaceAll(" ", "-"));
       candidates.add(variant.replaceAll(" ", ""));
@@ -106,7 +87,10 @@ function buildNameIndex(models) {
   const index = new Map();
 
   for (const model of models) {
-    for (const variant of nameVariants(model.shortName)) {
+    const variants = new Set(
+      [model.shortName, model.slug].filter(Boolean).flatMap(nameVariants),
+    );
+    for (const variant of variants) {
       const items = index.get(variant) ?? [];
       items.push(model);
       index.set(variant, items);
@@ -138,7 +122,10 @@ function chooseBestNameMatch(candidates, modelName) {
   let bestScore = -1;
 
   for (const candidate of candidates) {
-    const score = scoreReasoningPreference(targetVariant, reasoningVariant(candidate.shortName.toLowerCase()));
+    const score = scoreReasoningPreference(
+      targetVariant,
+      reasoningVariant(candidate.shortName.toLowerCase()),
+    );
 
     if (score > bestScore) {
       best = candidate;
@@ -161,8 +148,19 @@ function findLeaderboardModel({ modelId, modelName, nameIndex }) {
   return null;
 }
 
-function annotateModelOverride(providerConfig, modelId, displayName) {
-  setModelOverride(providerConfig, modelId, displayName);
+export function createModelNameAnnotator(leaderboard) {
+  const nameIndex = buildNameIndex(leaderboard?.models ?? []);
+  return (modelId, modelName) => {
+    const baseName = baseDisplayName(modelName || modelId);
+    const matchedModel = findLeaderboardModel({
+      modelId,
+      modelName: baseName,
+      nameIndex,
+    });
+    if (!matchedModel || !Number.isFinite(matchedModel.intelligenceIndex))
+      return modelName;
+    return `${baseName} ${scoreTag(matchedModel.intelligenceIndex)}`;
+  };
 }
 
 export function applyIntelligenceAnnotations(config, leaderboard) {
@@ -171,24 +169,17 @@ export function applyIntelligenceAnnotations(config, leaderboard) {
   }
 
   config.provider ||= {};
-  const nameIndex = buildNameIndex(leaderboard.models);
+  const annotateName = createModelNameAnnotator(leaderboard);
 
-  for (const [providerId, providerConfig] of Object.entries(config.provider)) {
+  for (const providerConfig of Object.values(config.provider)) {
     providerConfig.models ||= {};
 
-    for (const [modelId, modelConfig] of Object.entries(providerConfig.models)) {
-      const matchedModel = findLeaderboardModel({
-        modelId,
-        modelName: modelConfig.name || modelId,
-        nameIndex,
-      });
-
-      if (!matchedModel) {
-        continue;
-      }
-
-      const annotatedName = `${baseDisplayName(modelConfig.name || matchedModel.shortName)} ${scoreTag(matchedModel.intelligenceIndex)}`;
-      annotateModelOverride(providerConfig, modelId, annotatedName);
+    for (const [modelId, modelConfig] of Object.entries(
+      providerConfig.models,
+    )) {
+      const currentName = modelConfig.name || modelId;
+      const name = annotateName(modelId, currentName);
+      if (name !== currentName) setModelOverride(providerConfig, modelId, name);
     }
   }
 }
@@ -219,7 +210,8 @@ export function buildProviderNamePatch(providers, leaderboard) {
     }
 
     for (const [modelId, model] of Object.entries(provider.models)) {
-      const nextName = candidateConfig.provider?.[provider.id]?.models?.[modelId]?.name;
+      const nextName =
+        candidateConfig.provider?.[provider.id]?.models?.[modelId]?.name;
 
       if (!nextName || nextName === model.name) {
         continue;

@@ -33,35 +33,39 @@ function visit(value, predicate) {
 function extractModelsFromFlightPayload(html) {
   const chunkPattern = /self\.__next_f\.push\(\[1,"([\s\S]*?)"\]\)/g;
 
-  for (const match of html.matchAll(chunkPattern)) {
-    const decodedChunk = decodeFlightChunk(match[1]);
-    const separatorIndex = decodedChunk.indexOf(":");
+  // Flight records can span script chunks, so reassemble them before parsing.
+  const flightPayload = [...html.matchAll(chunkPattern)]
+    .map((match) => decodeFlightChunk(match[1]))
+    .join("");
 
-    if (separatorIndex === -1) {
+  for (const record of flightPayload.split("\n")) {
+    const separatorIndex = record.indexOf(":");
+    if (separatorIndex === -1) continue;
+    const payloadText = record.slice(separatorIndex + 1).trim();
+    if (
+      !payloadText.includes('"models"') ||
+      (!payloadText.includes('"intelligence_index"') &&
+        !payloadText.includes('"intelligenceIndex"'))
+    )
+      continue;
+
+    let payload;
+    try {
+      payload = JSON.parse(payloadText);
+    } catch {
       continue;
     }
-
-    const payloadText = decodedChunk.slice(separatorIndex + 1).trim();
-
-    if (!payloadText.includes('"intelligence_index"') || !payloadText.includes('"models"')) {
-      continue;
-    }
-
-    const payload = JSON.parse(payloadText);
     const matchedNode = visit(
       payload,
       (node) =>
-        Boolean(
-          node &&
-            typeof node === "object" &&
-            Array.isArray(node.models) &&
-            node.models.some((model) => typeof model?.intelligence_index === "number"),
+        Array.isArray(node?.models) &&
+        node.models.some((model) =>
+          Number.isFinite(
+            model?.intelligenceIndex ?? model?.intelligence_index,
+          ),
         ),
     );
-
-    if (matchedNode) {
-      return matchedNode.models;
-    }
+    if (matchedNode) return matchedNode.models;
   }
 
   throw new Error("Could not find leaderboard models in React Flight payload");
@@ -71,22 +75,35 @@ export function extractLeaderboardSnapshot(html) {
   const models = extractModelsFromFlightPayload(html);
 
   const simplifiedModels = models
-    .filter((model) => typeof model?.intelligence_index === "number" && model?.short_name && model?.model_creators?.slug)
+    .filter(
+      (model) =>
+        Number.isFinite(
+          model?.intelligenceIndex ?? model?.intelligence_index,
+        ) &&
+        typeof (model.shortName ?? model.short_name) === "string" &&
+        (model.shortName ?? model.short_name),
+    )
     .map((model) => ({
-      id: model.id,
+      id: model.id ?? model.slug,
       slug: model.slug,
-      shortName: model.short_name,
-      intelligenceIndex: model.intelligence_index,
-      estimatedIntelligenceIndex: model.estimated_intelligence_index,
+      shortName: model.shortName ?? model.short_name,
+      intelligenceIndex: model.intelligenceIndex ?? model.intelligence_index,
+      estimatedIntelligenceIndex:
+        model.intelligenceIndexIsEstimated ??
+        model.estimated_intelligence_index,
       creator: {
-        name: model.model_creators.name,
-        slug: model.model_creators.slug,
+        name: model.modelCreatorName ?? model.model_creators?.name ?? null,
+        slug: model.model_creators?.slug ?? null,
       },
-      modelUrl: model.model_url ? `https://artificialanalysis.ai${model.model_url}` : null,
+      modelUrl: model.model_url
+        ? `https://artificialanalysis.ai${model.model_url}`
+        : null,
     }));
 
   if (simplifiedModels.length === 0) {
-    throw new Error("Leaderboard payload did not contain any models with intelligence scores");
+    throw new Error(
+      "Leaderboard payload did not contain any models with intelligence scores",
+    );
   }
 
   return {
