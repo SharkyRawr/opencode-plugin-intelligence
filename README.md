@@ -14,7 +14,7 @@ It fetches the leaderboard once and writes a local cache file. It reuses that ca
 
 ## Install
 
-This plugin is **OpenCode v2 only** and requires **v2.0.28 or newer v2**. It is **not compatible with OpenCode v1**.
+This plugin is **OpenCode v2 only** and requires **v2.0.28 or newer v2** and **Node.js 20 or newer**. It is **not compatible with OpenCode v1**.
 
 Add the package to `opencode.json` or `opencode.jsonc`:
 
@@ -39,16 +39,16 @@ Default cache path (shared with the previous version):
 
 Environment variables (set on the OpenCode server):
 
-- `OPENCODE_INTELLIGENCE_FORCE_REFRESH=1` forces a re-fetch instead of reading the cache when the plugin loads.
+- `OPENCODE_INTELLIGENCE_FORCE_REFRESH=1` forces a re-fetch instead of reading the cache when the plugin loads. If it fails, annotations are skipped; this mode does not fall back to stale scores.
 - `OPENCODE_INTELLIGENCE_CACHE_PATH=/path/to/leaderboard.json` overrides the cache location.
 
-Manual refresh:
+Manual refresh from a local checkout (uses `OPENCODE_INTELLIGENCE_CACHE_PATH` if set):
 
 ```bash
 npm run refresh-cache
 ```
 
-Reload the plugin or restart OpenCode after manually refreshing to load the new scores. There is no background polling timer. An expired cache refreshes on the next load; if that refresh fails, the plugin warns and uses the stale cache. Separate OpenCode server processes may each issue a refresh; explicit refreshes bypass the 24-hour expiry. If no leaderboard can be loaded, the plugin warns and leaves model names unchanged.
+Reload the plugin or restart OpenCode after manually refreshing to load the new scores. There is no background polling timer. An expired cache refreshes on the next load; if that refresh fails, the plugin warns and uses the stale cache. Separate OpenCode server processes may each issue a refresh; explicit refreshes bypass the 24-hour expiry. If no leaderboard can be loaded, the plugin warns and leaves model names unchanged. Malformed or unreadable cache files also skip annotations; they are not automatically replaced. Use a manual or forced refresh to replace them.
 
 ## Matching and limitations
 
