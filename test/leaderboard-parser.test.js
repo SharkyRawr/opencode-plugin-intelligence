@@ -31,6 +31,28 @@ function flightScript(text) {
   return `<script>self.__next_f.push([1,${JSON.stringify(text)}]);</script>`;
 }
 
+test("searching nested unmatched arrays does not repeat traversal", (t) => {
+  let unrelated = { text: "unrelated" };
+  const depth = 12;
+  for (let i = 0; i < depth; i++) unrelated = [unrelated];
+  const html = flightScript(
+    `35:${JSON.stringify({
+      children: [
+        unrelated,
+        {
+          models: [{ shortName: "Example", intelligenceIndex: 60 }],
+        },
+      ],
+    })}\n`,
+  );
+  const values = t.mock.method(Object, "values");
+  assert.equal(extractLeaderboardSnapshot(html).modelCount, 1);
+  assert.ok(
+    values.mock.callCount() <= depth + 2,
+    "traversal work must stay linear",
+  );
+});
+
 test("parses current camelCase models in a Flight record split across scripts", () => {
   const models = [
     {

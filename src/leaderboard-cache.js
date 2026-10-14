@@ -26,26 +26,23 @@ async function fetchLeaderboardHtml() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  let response;
-
   try {
-    response = await fetch(LEADERBOARD_URL, {
+    const response = await fetch(LEADERBOARD_URL, {
       signal: controller.signal,
       headers: {
         "user-agent": "opencode-plugin-intelligence/0.1.1",
       },
     });
+    if (!response.ok) {
+      throw new Error(
+        `Artificial Analysis request failed with ${response.status}`,
+      );
+    }
+
+    return await response.text();
   } finally {
     clearTimeout(timeout);
   }
-
-  if (!response.ok) {
-    throw new Error(
-      `Artificial Analysis request failed with ${response.status}`,
-    );
-  }
-
-  return response.text();
 }
 
 async function fetchLeaderboardSnapshot() {
@@ -92,6 +89,7 @@ export async function readLeaderboardCache({
   directory,
   worktree,
   cachePath,
+  onRefreshError,
 } = {}) {
   const resolvedCachePath = resolveCachePath({
     directory,
@@ -128,6 +126,7 @@ export async function readLeaderboardCache({
       "opencode-plugin-intelligence: Refresh failed; using stale leaderboard cache",
       error,
     );
+    onRefreshError?.(error);
     return cached;
   }
 }

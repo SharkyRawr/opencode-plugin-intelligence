@@ -4,6 +4,44 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import plugin from "../index.js";
+import { cacheStatusRpc } from "../src/cache-status.js";
+import tui from "../tui.js";
+
+function notificationContext(t) {
+  let handlers;
+  const dispose = t.mock.fn();
+  const toasts = [];
+  const location = { directory: "/example" };
+  return {
+    rpc: {
+      async register(definition, implementation) {
+        assert.deepEqual(definition, cacheStatusRpc);
+        handlers = implementation;
+        return { dispose };
+      },
+    },
+    async showStatus() {
+      await tui.setup({
+        location,
+        client: {
+          rpc(definition) {
+            assert.deepEqual(definition, cacheStatusRpc);
+            return {
+              status(input, options) {
+                assert.equal(input, null);
+                assert.deepEqual(options, { location });
+                return handlers.status();
+              },
+            };
+          },
+        },
+        ui: { toast: { show: (toast) => toasts.push(toast) } },
+      });
+      return toasts;
+    },
+    dispose,
+  };
+}
 
 async function withCache(t, content) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "intelligence-test-"));
@@ -37,7 +75,9 @@ test("v2 registers a repeatable model transform and cleans it up", async (t) => 
   });
   let transform;
   let disposed = 0;
+  const notification = notificationContext(t);
   const cleanup = await plugin.setup({
+    rpc: notification.rpc,
     model: {
       async transform(callback) {
         transform = callback;
@@ -86,20 +126,28 @@ test("v2 registers a repeatable model transform and cleans it up", async (t) => 
   assert.equal(models[3].name, "Example Model (AIQ: 60)");
   await cleanup();
   assert.equal(disposed, 1);
+  assert.equal(notification.dispose.mock.callCount(), 1);
+  assert.deepEqual(await notification.showStatus(), []);
 });
 
 test("an unreadable cache leaves OpenCode models alone and reports a warning", async (t) => {
   await withCache(t, "invalid JSON");
   const warnings = t.mock.method(console, "warn", () => {});
+  const notification = notificationContext(t);
   const cleanup = await plugin.setup({
+    rpc: notification.rpc,
     model: {
       transform() {
         assert.fail("must not register a transform with unavailable data");
       },
     },
   });
-  assert.equal(cleanup, undefined);
   assert.equal(warnings.mock.callCount(), 1);
+  const [toast] = await notification.showStatus();
+  assert.equal(toast.variant, "error");
+  assert.match(toast.message, /could not be loaded; scores are unavailable/);
+  await cleanup();
+  assert.equal(notification.dispose.mock.callCount(), 1);
 });
 
 test("an empty leaderboard does not register a transform", async (t) => {
@@ -107,14 +155,63 @@ test("an empty leaderboard does not register a transform", async (t) => {
     t,
     JSON.stringify({ fetchedAt: new Date().toISOString(), models: [] }),
   );
-  assert.equal(
-    await plugin.setup({
+  const notification = notificationContext(t);
+  const cleanup = await plugin.setup({
+    rpc: notification.rpc,
+    model: {
+      transform() {
+        assert.fail("must not register an empty transform");
+      },
+    },
+  });
+  assert.deepEqual(await notification.showStatus(), []);
+  await cleanup();
+});
+
+for (const failure of ["missing cache", "forced refresh", "expired cache"]) {
+  test(`${failure} fetch failure shows an error toast`, async (t) => {
+    const models = [{ shortName: "Example", intelligenceIndex: 50 }];
+    await withCache(
+      t,
+      JSON.stringify({ fetchedAt: "2000-01-01T00:00:00Z", models }),
+    );
+    if (failure === "missing cache")
+      await rm(process.env.OPENCODE_INTELLIGENCE_CACHE_PATH);
+    if (failure === "forced refresh")
+      process.env.OPENCODE_INTELLIGENCE_FORCE_REFRESH = "1";
+    t.mock.method(globalThis, "fetch", async () => ({
+      ok: false,
+      status: 503,
+    }));
+    t.mock.method(console, "warn", () => {});
+    const notification = notificationContext(t);
+    let transform;
+    const cleanup = await plugin.setup({
+      rpc: notification.rpc,
       model: {
-        transform() {
-          assert.fail("must not register an empty transform");
+        async transform(callback) {
+          assert.equal(failure, "expired cache");
+          transform = callback;
+          return { dispose() {} };
         },
       },
-    }),
-    undefined,
-  );
-});
+    });
+    const toasts = await notification.showStatus();
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].variant, "error");
+    assert.match(toasts[0].message, /503/);
+    if (failure === "expired cache") {
+      assert.match(toasts[0].message, /using saved scores/);
+      const model = { providerID: "host", id: "example", name: "Example" };
+      transform({
+        list: () => [model],
+        update: (_provider, _id, update) => update(model),
+      });
+      assert.equal(model.name, "Example (AIQ: 50)");
+    } else {
+      assert.equal(transform, undefined);
+      assert.match(toasts[0].message, /scores are unavailable/);
+    }
+    await cleanup();
+  });
+}

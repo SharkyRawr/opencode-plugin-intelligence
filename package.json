@@ -12,10 +12,12 @@
     "access": "public"
   },
   "exports": {
-    ".": "./index.js"
+    ".": "./index.js",
+    "./tui": "./tui.js"
   },
   "files": [
     "index.js",
+    "tui.js",
     "src",
     "scripts/refresh-cache.mjs",
     "README.md",

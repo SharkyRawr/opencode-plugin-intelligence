@@ -33,6 +33,43 @@ function mockFetch(t) {
   }));
 }
 
+test("the timeout covers a stalled response body and allows a later retry", async (t) => {
+  const file = await cachePath(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let bodyStarted;
+  const started = new Promise((resolve) => {
+    bodyStarted = resolve;
+  });
+  const fetch = t.mock.method(
+    globalThis,
+    "fetch",
+    async (_url, { signal }) => ({
+      ok: true,
+      text: () =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+          bodyStarted();
+        }),
+    }),
+  );
+  const pending = refreshLeaderboardCache({ cachePath: file });
+  const rejected = assert.rejects(pending, { name: "AbortError" });
+  await started;
+  t.mock.timers.tick(4000);
+  await rejected;
+  fetch.mock.mockImplementation(async () => ({
+    ok: true,
+    text: async () => html,
+  }));
+  assert.equal(
+    (await refreshLeaderboardCache({ cachePath: file })).modelCount,
+    1,
+  );
+  assert.equal(fetch.mock.callCount(), 2);
+});
+
 test("reuses a cache until 24 hours and refreshes at the expiry boundary", async (t) => {
   const file = await cachePath(t);
   await writeCacheFile(file, cached);

@@ -15,9 +15,7 @@ function visit(value, predicate) {
         return result;
       }
     }
-  }
-
-  if (value && typeof value === "object") {
+  } else if (value && typeof value === "object") {
     for (const item of Object.values(value)) {
       const result = visit(item, predicate);
 

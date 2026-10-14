@@ -50,6 +50,8 @@ npm run refresh-cache
 
 Reload the plugin or restart OpenCode after manually refreshing to load the new scores. There is no background polling timer. An expired cache refreshes on the next load; if that refresh fails, the plugin warns and uses the stale cache. Separate OpenCode server processes may each issue a refresh; explicit refreshes bypass the 24-hour expiry. If no leaderboard can be loaded, the plugin warns and leaves model names unchanged. Malformed or unreadable cache files also skip annotations; they are not automatically replaced. Use a manual or forced refresh to replace them.
 
+Cache loading and refresh failures also show an error toast in the OpenCode TUI. The toast says whether saved scores are still in use or scores are unavailable. Console warnings remain available on headless servers.
+
 ## Matching and limitations
 
 - Matching uses normalized model names, IDs, and leaderboard slugs, independently of provider identity. Version separators and trailing `preview-free` availability labels are normalized. The same model can be annotated on several hosts without provider-specific tables.
