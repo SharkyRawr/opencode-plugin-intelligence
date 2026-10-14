@@ -35,12 +35,6 @@ function scoreTag(score) {
   return `(AIQ: ${Number(score.toFixed(2)).toString()})`;
 }
 
-function setModelOverride(providerConfig, modelId, displayName) {
-  providerConfig.models ||= {};
-  providerConfig.models[modelId] ||= {};
-  providerConfig.models[modelId].name = displayName;
-}
-
 function baseDisplayName(name) {
   return name.replace(INTELLIGENCE_TAG_PATTERN, "");
 }
@@ -161,66 +155,4 @@ export function createModelNameAnnotator(leaderboard) {
       return modelName;
     return `${baseName} ${scoreTag(matchedModel.intelligenceIndex)}`;
   };
-}
-
-export function applyIntelligenceAnnotations(config, leaderboard) {
-  if (!leaderboard?.models?.length) {
-    return;
-  }
-
-  config.provider ||= {};
-  const annotateName = createModelNameAnnotator(leaderboard);
-
-  for (const providerConfig of Object.values(config.provider)) {
-    providerConfig.models ||= {};
-
-    for (const [modelId, modelConfig] of Object.entries(
-      providerConfig.models,
-    )) {
-      const currentName = modelConfig.name || modelId;
-      const name = annotateName(modelId, currentName);
-      if (name !== currentName) setModelOverride(providerConfig, modelId, name);
-    }
-  }
-}
-
-export function buildProviderNamePatch(providers, leaderboard) {
-  const config = { provider: {} };
-  const candidateConfig = { provider: {} };
-
-  for (const provider of providers) {
-    if (!provider?.id || !provider?.models) {
-      continue;
-    }
-
-    candidateConfig.provider[provider.id] = { models: {} };
-
-    for (const [modelId, model] of Object.entries(provider.models)) {
-      candidateConfig.provider[provider.id].models[modelId] = {
-        name: model.name,
-      };
-    }
-  }
-
-  applyIntelligenceAnnotations(candidateConfig, leaderboard);
-
-  for (const provider of providers) {
-    if (!provider?.id || !provider?.models) {
-      continue;
-    }
-
-    for (const [modelId, model] of Object.entries(provider.models)) {
-      const nextName =
-        candidateConfig.provider?.[provider.id]?.models?.[modelId]?.name;
-
-      if (!nextName || nextName === model.name) {
-        continue;
-      }
-
-      config.provider[provider.id] ||= { models: {} };
-      config.provider[provider.id].models[modelId] = { name: nextName };
-    }
-  }
-
-  return config;
 }

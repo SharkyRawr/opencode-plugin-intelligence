@@ -2,9 +2,9 @@
 
 ## Project
 
-`opencode-plugin-intelligence` is an OpenCode plugin that annotates model display names with the Artificial Analysis Intelligence Index.
+`opencode-plugin-intelligence` is an OpenCode v2 plugin that annotates model display names with the Artificial Analysis Intelligence Index. It requires OpenCode v2.0.28 or newer v2 and Node.js 20 or newer.
 
-The plugin fetches the model leaderboard from `https://artificialanalysis.ai/leaderboards/models`, extracts scored models, caches the simplified result locally, discovers the resolved provider/model list from OpenCode at runtime, and writes generated model-name overrides so `/models` can display tags like `[AAII 53.97]`.
+The plugin fetches the model leaderboard from `https://artificialanalysis.ai/leaderboards/models`, extracts scored models, caches the simplified result locally, and annotates OpenCode's runtime model catalog so `/models` displays scores like `(AIQ: 53.97)`.
 
 ## Current Design
 
@@ -12,25 +12,29 @@ The plugin fetches the model leaderboard from `https://artificialanalysis.ai/lea
 - Cache/fetch layer: [src/leaderboard-cache.js](/Users/sophie/checkouts/opencode-plugin-intelligence/src/leaderboard-cache.js)
 - Leaderboard parser: [src/leaderboard-parser.js](/Users/sophie/checkouts/opencode-plugin-intelligence/src/leaderboard-parser.js)
 - Model annotation logic: [src/model-annotations.js](/Users/sophie/checkouts/opencode-plugin-intelligence/src/model-annotations.js)
+- TUI entry point and error toasts: [src/tui.js](/Users/sophie/checkouts/opencode-plugin-intelligence/src/tui.js)
+- Startup cache status RPC contract: [src/cache-status.js](/Users/sophie/checkouts/opencode-plugin-intelligence/src/cache-status.js)
 - Manual cache refresh: [scripts/refresh-cache.mjs](/Users/sophie/checkouts/opencode-plugin-intelligence/scripts/refresh-cache.mjs)
 
 Important behavior:
 
 - Matching is based on model names, not provider identity.
 - If both reasoning and non-reasoning variants exist, prefer the variant that matches the provider model name.
-- Cached leaderboard data is intended to be reused once fetched. Do not add aggressive re-fetch behavior unless explicitly requested.
-- The plugin no longer relies on provider-specific auth hooks or the `config` hook to annotate models.
-- On startup, the plugin waits for the provider catalog to become available, computes only the changed display names, writes them to `~/.config/opencode/config.json`, and disposes the instance once if the generated config changed.
-- Generated config must stay minimal. Only write model entries whose names actually change.
+- Setup loads the leaderboard and registers `ctx.model.transform`. The transform also runs when OpenCode rebuilds its catalog; it updates only changed `draft.name` values.
+- `createModelNameAnnotator` builds a name index once per setup and reuses it for the transform. Existing `[AAII …]` and `(AIQ: …)` suffixes are replaced on matched names.
+- The plugin does not write OpenCode config or restart the server. Explicit configured model names take precedence over annotations.
+- Cache entries are reused for 24 hours. Missing or expired entries refresh on access; forced and manual refreshes bypass expiry. Concurrent refreshes share one request per cache path within the process. There is no polling timer.
+- A failed expiry refresh preserves stale scores. Missing-cache, forced-refresh, malformed-cache, and unreadable-cache failures skip annotations. Console warnings and TUI error toasts report failures.
+- The TUI reads startup cache status through RPC so failures are visible even when it attaches after server setup. Cleanup disposes the RPC and model-transform registrations.
 
 ## Working Rules
 
 - Keep the plugin dependency-light. Prefer built-in Node APIs unless an external package is clearly justified.
-- Preserve the cache-first behavior. Refresh only when the cache is missing or explicitly forced.
+- Preserve the 24-hour cache policy, concurrent request sharing, and stale-score fallback. The four-second fetch timeout covers both headers and the response body.
 - Treat the Artificial Analysis page structure as unstable. If parsing changes are needed, update tests at the same time.
-- Do not reintroduce provider-id maintenance tables unless absolutely necessary. The intended strategy is to discover providers programmatically from OpenCode and match by model name.
-- Do not bloat the generated config file by copying every model name. The generator should emit overrides only for matched models whose names changed.
-- Avoid hook timing assumptions. The initial `server.connected` event happens too early for plugin event handlers, so startup sync is triggered directly from plugin initialization.
+- Do not reintroduce provider-id maintenance tables unless absolutely necessary. Use the runtime model catalog and match by model name, ID, and leaderboard slug.
+- Keep annotation logic in `createModelNameAnnotator`; do not restore the legacy config-patching path.
+- Register transforms and cache status directly from setup rather than relying on startup event timing.
 
 ## Verification
 
@@ -38,6 +42,7 @@ Run:
 
 ```bash
 node --test
+npm run lint
 ```
 
 If changing fetch or parse behavior, also verify:
