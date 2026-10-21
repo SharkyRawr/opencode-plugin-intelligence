@@ -92,3 +92,36 @@ test("rejects a leaderboard with no usable scores", () => {
     /Could not find leaderboard models/,
   );
 });
+
+test("parses initialModels from the current leaderboard page", () => {
+  const html = flightScript(
+    `20:${JSON.stringify([
+      "$",
+      "div",
+      null,
+      {
+        children: [
+          "$",
+          "$L21",
+          null,
+          {
+            models: [],
+            initialModels: [
+              {
+                slug: "example",
+                shortName: "Example Model",
+                intelligenceIndex: 0,
+              },
+              { shortName: "Unscored Model", intelligenceIndex: null },
+            ],
+          },
+        ],
+      },
+    ])}\n`,
+  );
+  const snapshot = extractLeaderboardSnapshot(html);
+
+  assert.equal(snapshot.modelCount, 1);
+  assert.equal(snapshot.models[0].slug, "example");
+  assert.equal(snapshot.models[0].intelligenceIndex, 0);
+});

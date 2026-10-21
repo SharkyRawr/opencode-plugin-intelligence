@@ -1,6 +1,6 @@
 {
   "name": "@lunacode/opencode-plugin-intelligence",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "license": "CC-BY-NC-SA-4.0",
   "description": "Annotate OpenCode model names with the Artificial Analysis Intelligence Index.",
   "type": "module",

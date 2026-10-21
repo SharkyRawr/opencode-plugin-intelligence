@@ -2,6 +2,15 @@ function decodeFlightChunk(chunk) {
   return JSON.parse(`"${chunk}"`);
 }
 
+function hasScoredModels(models) {
+  return (
+    Array.isArray(models) &&
+    models.some((model) =>
+      Number.isFinite(model?.intelligenceIndex ?? model?.intelligence_index),
+    )
+  );
+}
+
 function visit(value, predicate) {
   if (predicate(value)) {
     return value;
@@ -41,7 +50,8 @@ function extractModelsFromFlightPayload(html) {
     if (separatorIndex === -1) continue;
     const payloadText = record.slice(separatorIndex + 1).trim();
     if (
-      !payloadText.includes('"models"') ||
+      (!payloadText.includes('"models"') &&
+        !payloadText.includes('"initialModels"')) ||
       (!payloadText.includes('"intelligence_index"') &&
         !payloadText.includes('"intelligenceIndex"'))
     )
@@ -56,14 +66,12 @@ function extractModelsFromFlightPayload(html) {
     const matchedNode = visit(
       payload,
       (node) =>
-        Array.isArray(node?.models) &&
-        node.models.some((model) =>
-          Number.isFinite(
-            model?.intelligenceIndex ?? model?.intelligence_index,
-          ),
-        ),
+        hasScoredModels(node?.models) || hasScoredModels(node?.initialModels),
     );
-    if (matchedNode) return matchedNode.models;
+    if (matchedNode)
+      return hasScoredModels(matchedNode.models)
+        ? matchedNode.models
+        : matchedNode.initialModels;
   }
 
   throw new Error("Could not find leaderboard models in React Flight payload");
