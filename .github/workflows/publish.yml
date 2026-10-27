@@ -22,7 +22,7 @@ jobs:
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
-          version: 12.11.2
+          version: latest
       - name: Check release tag
         env:
           RELEASE_TAG: ${{ github.ref_name }}

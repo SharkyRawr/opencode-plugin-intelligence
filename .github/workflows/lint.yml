@@ -19,7 +19,7 @@ jobs:
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
-          version: 12.11.2
+          version: latest
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm test

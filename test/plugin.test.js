@@ -3,9 +3,22 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { Host } from "@opencode/plugin/host";
 import plugin from "../index.js";
 import { cacheStatusRpc } from "../src/cache-status.js";
 import tui from "../tui.js";
+
+test("OpenCode resolves and loads the server and TUI definitions", async () => {
+  const entries = Host.resolve({
+    directory: path.resolve(import.meta.dirname, ".."),
+  });
+  for (const runtime of ["server", "tui"]) {
+    assert.ok(entries[runtime], `missing ${runtime} entrypoint`);
+    const { default: definition } = await Host.load(entries[runtime]);
+    assert.equal(definition.id, "opencode-plugin-intelligence");
+    assert.equal(typeof definition.setup, "function");
+  }
+});
 
 function notificationContext(t) {
   let handlers;
