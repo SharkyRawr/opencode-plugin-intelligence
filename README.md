@@ -14,7 +14,7 @@ It fetches the leaderboard once and writes a local cache file. It reuses that ca
 
 ## Install
 
-This plugin is **OpenCode v2 only** and requires **v2.2.0 or newer v2** and **Node.js 20 or newer**. It is **not compatible with OpenCode v1**.
+This plugin is **OpenCode v2 only** and requires **v2.2.0 or newer v2** and **Node.js 26.13.0 or newer**. It is **not compatible with OpenCode v1**.
 
 Add the package to `opencode.json` or `opencode.jsonc`:
 

@@ -2,7 +2,7 @@
 
 ## Project
 
-`opencode-plugin-intelligence` is an OpenCode v2 plugin that annotates model display names with the Artificial Analysis Intelligence Index. It requires OpenCode v2.2.0 or newer v2 and Node.js 20 or newer.
+`opencode-plugin-intelligence` is an OpenCode v2 plugin that annotates model display names with the Artificial Analysis Intelligence Index. It requires OpenCode v2.2.0 or newer v2 and Node.js 26.13.0 or newer.
 
 The plugin fetches the model leaderboard from `https://artificialanalysis.ai/leaderboards/models`, extracts scored models, caches the simplified result locally, and annotates OpenCode's runtime model catalog so `/models` displays scores like `(AIQ: 53.97)`.
 
